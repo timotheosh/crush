@@ -192,7 +192,8 @@ reviewed.
     "tui": {
       "compact_mode": false,
       "diff_mode": "unified",
-      "transparent": false
+      "transparent": false,
+      "mouse": true
     },
     "auto_lsp": true,
     "debug": false,

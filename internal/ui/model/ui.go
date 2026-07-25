@@ -199,6 +199,11 @@ type UI struct {
 
 	isTransparent bool
 
+	// mouseEnabled controls whether Bubble Tea mouse reporting is active.
+	// When false, the terminal emulator (or tmux) handles text selection,
+	// copy/paste, right-click, and scrolling instead of Crush.
+	mouseEnabled bool
+
 	// themeKey identifies the currently applied theme so applyTheme can
 	// skip the expensive style rebuild when switching to a provider that
 	// resolves to the same theme.
@@ -473,6 +478,8 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	ui.progressBarEnabled = opts.Progress == nil || *opts.Progress
 	// enable transparent mode
 	ui.isTransparent = opts.TUI.Transparent != nil && *opts.TUI.Transparent
+	// enable mouse support (default on)
+	ui.mouseEnabled = opts.TUI.Mouse == nil || *opts.TUI.Mouse
 
 	return ui
 }
@@ -2878,6 +2885,24 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	return nil
 }
 
+// mouseMode determines the Bubble Tea mouse reporting mode to request for
+// the current frame. When mouse support is disabled via configuration, no
+// mouse mode is requested so the terminal emulator (or tmux) can handle
+// text selection, copy/paste, and scrolling natively. Inline editors need
+// motion events even without a button pressed (e.g. for hover/drag), so
+// they use MouseModeAllMotion; everything else only needs click/drag
+// tracking via MouseModeCellMotion.
+func mouseMode(enabled, inlineActive bool) tea.MouseMode {
+	switch {
+	case !enabled:
+		return tea.MouseModeNone
+	case inlineActive:
+		return tea.MouseModeAllMotion
+	default:
+		return tea.MouseModeCellMotion
+	}
+}
+
 // View renders the UI model's view.
 func (m *UI) View() tea.View {
 	var v tea.View
@@ -2885,11 +2910,7 @@ func (m *UI) View() tea.View {
 	if !m.isTransparent {
 		v.BackgroundColor = m.com.Styles.Background
 	}
-	if m.activeInline != nil {
-		v.MouseMode = tea.MouseModeAllMotion
-	} else {
-		v.MouseMode = tea.MouseModeCellMotion
-	}
+	v.MouseMode = mouseMode(m.mouseEnabled, m.activeInline != nil)
 	v.ReportFocus = m.caps.ReportFocusEvents
 	v.WindowTitle = "crush " + home.Short(m.com.Workspace.WorkingDir())
 
